@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "IG Bulk Unliker",
-  "version": "1.3",
+  "version": "1.4",
   "description": "Batal suka banyak postingan sekaligus lewat halaman Aktivitas Anda > Suka di Instagram.",
   "permissions": ["debugger"],
   "background": { "service_worker": "background.js" },

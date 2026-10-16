@@ -80,7 +80,7 @@
     <div class="card">
       <div class="head">
         <div class="logo">💔</div>
-        <div class="title">IG Bulk Unliker<small>Batal suka massal · v1.3</small></div>
+        <div class="title">IG Bulk Unliker<small>Batal suka massal · v1.4</small></div>
         <button class="iconbtn" id="min" title="Kecilkan">–</button>
       </div>
       <div class="body">
@@ -96,7 +96,7 @@
           </div>
           <div class="bar"><i id="bar"></i></div>
           <div class="row">
-            <div><label>Ukuran batch (maks 100!)</label><input id="batch" type="number" value="25" min="1" max="100"></div>
+            <div><label>Ukuran batch (maks 100)</label><input id="batch" type="number" value="25" min="1" max="100"></div>
             <div><label>Target total (0 = semua)</label><input id="total" type="number" value="0" min="0"></div>
           </div>
           <div class="btns">
@@ -268,7 +268,7 @@
     for (const i of order) {
       if (!running) return false;
       await STRATS[i][1](el);
-      if (await waitFor(verify, 1300)) {
+      if (await waitFor(verify, 2500)) {
         best[kind] = i;
         log(`${label}: berhasil (${STRATS[i][0]})`);
         return true;
@@ -372,7 +372,7 @@
   /* ================= Alur ================= */
   async function enterSelectMode() {
     if (selectIndicators()) return true;
-    const btn = await waitFor(() => findButton(T.select), 5000);
+    const btn = await waitFor(() => findButton(T.select), 15000);
     if (!btn) { log('Tombol Select/Pilih tidak ditemukan.'); return false; }
     return press(btn, 'btn', () => selectIndicators() || !findButton(T.select), 'Masuk mode Pilih');
   }
@@ -382,78 +382,168 @@
     try { await chrome.runtime.sendMessage({ type: 'detach' }); } catch (e) {}
   }
 
+  // Tidur yang bisa langsung berhenti saat tombol Stop ditekan
+  async function sleepRun(ms) {
+    const t0 = Date.now();
+    while (running && Date.now() - t0 < ms) await sleep(Math.min(250, ms - (Date.now() - t0)));
+  }
+
+  function saveResume(batch, total) {
+    try { sessionStorage.setItem('igu_resume', JSON.stringify({ batch, total, removed: removedTotal })); } catch (e) {}
+  }
+  function clearResume() {
+    try { sessionStorage.removeItem('igu_resume'); } catch (e) {}
+  }
+
   async function run() {
+    if (running) return;
     running = true;
     $('start').disabled = true;
     $('stop').disabled = false;
 
     const batch = Math.min(300, Math.max(1, +$('batch').value || 25));
     const total = Math.max(0, +$('total').value || 0);
+    saveResume(batch, total);
+
+    // stage: select -> unlike -> confirm. Kalau gagal di satu tahap, tahap itu diulang
+    // (bukan balik ke awal) supaya postingan yang sudah terpilih tidak ter-toggle lagi.
+    let stage = 'select', pendingN = 0, retries = 0, emptyStreak = 0, blockedCount = 0;
+
+    const fail = async (reason) => {
+      retries++;
+      const wait = Math.min(30000, 2000 * retries) + rand(0, 1000);
+      log(`${reason} — retry #${retries} dalam ${Math.round(wait / 1000)} dtk`);
+      setStatus(`${reason}. Retry #${retries}…`, 'on');
+      await sleepRun(wait);
+      if (running && retries % 5 === 0) {
+        log('Gagal beberapa kali berturut-turut, memuat ulang halaman lalu lanjut otomatis…');
+        saveResume(batch, total);
+        location.reload();
+        await sleepRun(20000);
+      }
+    };
 
     while (running && (total === 0 || removedTotal < total)) {
-      const want = total ? Math.min(batch, total - removedTotal) : batch;
+      try {
+        const want = total ? Math.min(batch, total - removedTotal) : batch;
 
-      // 1) Otomatis masuk mode Pilih
-      setStatus('Masuk ke mode Pilih…', 'on');
-      if (!(await enterSelectMode())) {
-        if (running) { setStatus('Gagal masuk mode Pilih', 'err'); diagnose(); }
-        break;
+        /* ---- Tahap 1: mode Pilih + pilih postingan ---- */
+        if (stage === 'select') {
+          setStatus('Masuk ke mode Pilih…', 'on');
+          if (!(await enterSelectMode())) {
+            if (running) await fail('Mode Pilih belum aktif');
+            continue;
+          }
+          await sleepRun(400);
+
+          setStatus(`Memilih ${want} postingan…`, 'on');
+          const n = await selectBatch(want);
+          if (!running) break;
+          if (n < 0) { await fail('Klik postingan belum berpengaruh'); continue; }
+          if (n === 0) {
+            emptyStreak++;
+            if (emptyStreak === 10) log('Kemungkinan semua like sudah habis. Tekan Stop jika memang sudah selesai.');
+            await fail(emptyStreak >= 10 ? 'Tidak ada postingan (mungkin sudah habis, tekan Stop)' : 'Postingan belum termuat');
+            continue;
+          }
+          emptyStreak = 0;
+          pendingN = n;
+          stage = 'unlike';
+          retries = 0;
+        }
+
+        /* ---- Tahap 2: tombol Batal suka / Delete ---- */
+        if (stage === 'unlike') {
+          setStatus('Menekan Batal suka…', 'on');
+          const unBtn = await waitFor(() => findButton(T.unlike), 20000);
+          if (!running) break;
+          if (!unBtn) {
+            if (!selectIndicators()) stage = 'select'; // pilihan hilang -> pilih ulang
+            await fail('Tombol Batal suka belum muncul');
+            continue;
+          }
+          const ok1 = await press(unBtn, 'btn', () => !!dialogConfirm() || !findButton(T.unlike), 'Batal suka');
+          if (!running) break;
+          if (!ok1) { await fail('Batal suka belum berpengaruh'); continue; }
+          stage = 'confirm';
+          retries = 0;
+        }
+
+        /* ---- Tahap 3: konfirmasi dialog ---- */
+        if (stage === 'confirm') {
+          setStatus('Konfirmasi…', 'on');
+          const conf = await waitFor(dialogConfirm, 8000);
+          if (!running) break;
+          if (conf) {
+            const ok2 = await press(conf, 'btn', () => !dialogConfirm(), 'Konfirmasi');
+            if (!running) break;
+            if (!ok2) { await fail('Konfirmasi belum berpengaruh'); continue; }
+          } else if (findButton(T.unlike)) {
+            stage = 'unlike';
+            await fail('Dialog konfirmasi belum muncul');
+            continue;
+          }
+
+          setStatus('Menunggu Instagram memproses…', 'on');
+          await waitFor(() => !dialogConfirm(), 15000);
+          await sleepRun(2500);
+          if (!running) break;
+
+          if (BLOCKED.test(document.body.innerText.slice(0, 20000))) {
+            blockedCount++;
+            const mins = Math.min(30, 5 * blockedCount);
+            setStatus(`Instagram membatasi aksi. Istirahat ${mins} menit…`, 'err');
+            log(`Terdeteksi pembatasan dari Instagram. Menunggu ${mins} menit lalu lanjut otomatis (Stop untuk berhenti).`);
+            stage = 'select';
+            await sleepRun(mins * 60000);
+            continue;
+          }
+
+          removedTotal += pendingN;
+          blockedCount = 0;
+          retries = 0;
+          stage = 'select';
+          saveResume(batch, total);
+          setStats(0);
+          log(`Batch selesai: ${pendingN} postingan. Total ${removedTotal}.`);
+
+          const pause = rand(5000, 10000);
+          setStatus(`Jeda ${Math.round(pause / 1000)} detik…`, 'on');
+          await sleepRun(pause);
+        }
+      } catch (e) {
+        log('Error: ' + (e && e.message));
+        if (running) await fail('Terjadi error');
       }
-      await sleep(400);
-
-      // 2) Pilih postingan
-      setStatus(`Memilih ${want} postingan…`, 'on');
-      const n = await selectBatch(want);
-      if (!running) break;
-      if (n <= 0) {
-        log(n === 0 ? 'Tidak ada postingan lagi.' : 'Klik pada postingan tidak berpengaruh.');
-        if (n < 0) setStatus('Gagal memilih postingan', 'err');
-        diagnose();
-        break;
-      }
-
-      // 3) Tombol Batal suka / Delete
-      setStatus('Menekan Batal suka…', 'on');
-      const unBtn = await waitFor(() => findButton(T.unlike), 6000);
-      if (!unBtn) { log('Tombol Batal suka tidak muncul.'); setStatus('Tombol Batal suka tidak ada', 'err'); diagnose(); break; }
-      const ok1 = await press(unBtn, 'btn', () => !!dialogConfirm() || !findButton(T.unlike), 'Batal suka');
-      if (!ok1) { setStatus('Gagal menekan Batal suka', 'err'); diagnose(); break; }
-
-      // 4) Konfirmasi dialog (jika ada)
-      const conf = await waitFor(dialogConfirm, 3000);
-      if (conf) {
-        const ok2 = await press(conf, 'btn', () => !dialogConfirm(), 'Konfirmasi');
-        if (!ok2) { setStatus('Gagal konfirmasi', 'err'); diagnose(); break; }
-      }
-
-      await sleep(2500);
-      if (BLOCKED.test(document.body.innerText.slice(0, 20000))) {
-        setStatus('Instagram membatasi aksi. Berhenti.', 'err');
-        log('Terdeteksi pembatasan dari Instagram. Tunggu beberapa jam lalu coba lagi.');
-        break;
-      }
-
-      removedTotal += n;
-      setStats(0);
-      log(`Batch selesai: ${n} postingan. Total ${removedTotal}.`);
-
-      // 5) Jeda acak antar batch
-      const pause = rand(5000, 10000);
-      setStatus(`Jeda ${Math.round(pause / 1000)} detik…`, 'on');
-      await sleep(pause);
     }
 
     const stopped = !running;
     running = false;
+    clearResume();
     $('start').disabled = false;
     $('stop').disabled = true;
-    if ($('dot').className.indexOf('err') === -1) setStatus(stopped ? 'Dihentikan' : 'Selesai', '');
+    setStatus(stopped ? 'Dihentikan' : 'Selesai (target tercapai)', '');
     setStats(0);
     detachDebugger();
   }
 
   $('start').onclick = run;
-  $('stop').onclick = () => { running = false; setStatus('Menghentikan…', ''); log('Dihentikan oleh pengguna.'); };
+  $('stop').onclick = () => { running = false; clearResume(); setStatus('Menghentikan…', ''); log('Dihentikan oleh pengguna.'); };
+
+  // Lanjut otomatis jika halaman di-reload oleh script saat retry
+  (function autoResume() {
+    let r = null;
+    try { r = JSON.parse(sessionStorage.getItem('igu_resume') || 'null'); } catch (e) {}
+    if (!r) return;
+    if (!onLikesPage()) { clearResume(); return; }
+    $('batch').value = r.batch;
+    $('total').value = r.total;
+    removedTotal = r.removed || 0;
+    setStats(0);
+    log('Melanjutkan otomatis setelah halaman dimuat ulang…');
+    setStatus('Menunggu halaman siap…', 'on');
+    setTimeout(() => { if (!running) run(); }, 4000);
+  })();
 
   log('Siap. Buka halaman Suka lalu klik Mulai.');
 })();
