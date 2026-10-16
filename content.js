@@ -96,7 +96,7 @@
           </div>
           <div class="bar"><i id="bar"></i></div>
           <div class="row">
-            <div><label>Ukuran batch (maks 300)</label><input id="batch" type="number" value="25" min="1" max="300"></div>
+            <div><label>Ukuran batch (maks 100!)</label><input id="batch" type="number" value="25" min="1" max="100"></div>
             <div><label>Target total (0 = semua)</label><input id="total" type="number" value="0" min="0"></div>
           </div>
           <div class="btns">
