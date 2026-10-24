@@ -1,193 +1,157 @@
-# IG Bulk Unliker
+# IG Like Cleaner
 
-Extension Chrome/Brave (Manifest V3) untuk **batal suka (unlike) banyak postingan Instagram sekaligus** lewat halaman *Aktivitas Anda → Suka*. Dilengkapi UI mengambang, kontrol batch, deteksi pembatasan Instagram, dan fallback **trusted click** via Chrome DevTools Protocol ketika klik biasa tidak berpengaruh.
+IG Like Cleaner is a Chrome/Brave extension built with Manifest V3. It helps you remove liked posts from Instagram's **Your Activity → Likes** page using batch actions.
 
-> ⚠️ **Disclaimer:** Tool ini untuk keperluan pribadi (membersihkan riwayat suka sendiri). Gunakan dengan risiko sendiri. Instagram dapat membatasi akun jika aksi dilakukan terlalu agresif. Penulis tidak bertanggung jawab atas segala konsekuensi penggunaan.
+> **Disclaimer:** This extension is intended for managing your own likes history. Use it at your own risk. Running actions too quickly may lead Instagram to temporarily restrict your account. The author is not responsible for any consequences.
 
----
+## Features
 
-## ✨ Fitur
+- **Batch processing:** Select a set number of posts, unlike them, confirm the dialog, and continue until the target is reached.
+- **Multiple click methods:** Tries synthetic events, `.click()`, keyboard input, and a trusted click through Chrome DevTools Protocol as a fallback.
+- **Strategy detection:** Remembers which click method worked and tries it first in later batches.
+- **English and Indonesian labels:** Supports both languages and can be extended in `content.js`.
+- **Floating control panel:** Uses Shadow DOM to keep the extension UI separate from Instagram's page. The panel can be minimized.
+- **Restriction detection:** Stops when it detects messages such as "Try again later" or "Action blocked".
+- **Diagnostics and logs:** Inspect page elements and copy logs for troubleshooting.
+- **Batch delays:** Waits between batches to reduce the pace of automated actions.
 
-- 🔁 **Batch otomatis** — pilih N postingan, klik Batal suka, konfirmasi dialog, ulangi sampai target tercapai.
-- 🖱️ **Multi-strategi klik** — sintetis event, `.click()`, keyboard Enter, dan **trusted click** (debugger) sebagai cadangan.
-- 🧠 **Auto-deteksi strategi** yang berhasil agar batch berikutnya lebih cepat.
-- 🌐 **Dukungan multi-bahasa** label tombol (Inggris + Indonesia). Mudah ditambah di `content.js`.
-- 🎚️ **UI mengambang** (Shadow DOM) — tidak mengganggu halaman Instagram, bisa diminimalkan.
-- 🛑 **Deteksi pembatasan** Instagram ("Try again later", "Action blocked", dll.) dan berhenti otomatis.
-- 🔍 **Diagnosa & salin log** untuk troubleshooting.
-- ⏱️ **Jeda acak** antar batch untuk mengurangi risiko deteksi.
+## Installation
 
----
+### 1. Download the repository
 
-## 📦 Instalasi
+Clone the repository:
 
-### 1. Unduh / Clone Repo
+    git clone https://github.com/USERNAME/ig-like-cleaner.git
 
-```bash
-git clone https://github.com/USERNAME/ig-bulk-unliker.git
-```
+Alternatively, extract `ig-like-cleaner.zip` if you downloaded a release.
 
-Atau ekstrak file `ig-unliker.zip` jika kamu menerima versi rilis.
+### 2. Load the extension
 
-### 2. Muat di Browser (Chrome / Brave / Edge)
+1. Open `chrome://extensions` in Chrome, or `brave://extensions` in Brave. Edge users can open `edge://extensions`.
+2. Enable **Developer mode**.
+3. Click **Load unpacked** and select the `ig-like-cleaner` folder.
+4. If the extension is already installed, click **Reload**.
+5. Refresh the open Instagram tab.
 
-1. Buka `chrome://extensions` atau `brave://extensions`.
-2. Aktifkan **Developer mode** di sudut kanan atas.
-3. Klik **Load unpacked**, lalu pilih folder `ig-unliker`.
-   - Jika sudah pernah terpasang, cukup klik ikon **Reload** ⟳.
-4. **Refresh (F5)** halaman Instagram yang sedang dibuka.
+## Usage
 
----
+1. Open Instagram's **Your Activity → Likes** page, or use **Open Likes page** in the extension panel.
+2. The IG Like Cleaner panel should appear in the bottom-right corner.
+3. Set the options:
+   - **Batch size:** Number of posts to process in each cycle (1–300, default: 25).
+   - **Total target:** Maximum number of posts to unlike. Set to `0` to process all available posts.
+4. Click **Start**.
 
-## 🚀 Cara Pakai
+For each batch, the extension enters selection mode, selects posts, clicks **Unlike** or **Delete**, and confirms the dialog if prompted. It then waits around 5–10 seconds before continuing.
 
-1. Buka halaman [Instagram Activity → Likes](https://www.instagram.com/your_activity/interactions/likes/), atau klik tombol **Buka halaman Suka** pada panel extension.
-2. Panel **IG Bulk Unliker** akan muncul di kanan bawah.
-   - **Ukuran batch** — jumlah postingan per siklus (1–300, default 25).
-   - **Target total** — batas total unlike (0 = semua).
-3. Klik **▶ Mulai**.
-4. Proses akan:
-   - Masuk ke mode **Pilih**.
-   - Memilih postingan sesuai batch.
-   - Menekan tombol **Batal suka / Unlike / Delete**.
-   - Mengonfirmasi dialog jika diperlukan.
-   - Menunggu selama 5–10 detik, lalu mengulangi proses.
-5. Klik **■ Stop** kapan saja untuk menghentikan proses.
+Click **Stop** whenever you want to end the process.
 
-### Tombol Bantu
+### Panel buttons
 
-| Tombol | Fungsi |
-|:---|:---|
-| 🔍 **Diagnosa** | Menampilkan informasi DOM (checkbox, tombol, tile, dialog) ke log. |
-| 📋 **Salin log** | Menyalin seluruh log ke clipboard untuk pelaporan bug. |
-| **–** (minimize) | Mengecilkan panel menjadi tombol bulat `❤ Unliker`. |
+| Button | Description |
+| --- | --- |
+| **Diagnostics** | Logs information about checkboxes, buttons, post tiles, and dialogs. |
+| **Copy log** | Copies the current log for troubleshooting or bug reports. |
+| **Minimize** | Collapses the panel into a small Like Cleaner button. |
 
----
+## Permissions
 
-## 🔐 Izin (Permissions)
+| Permission | Purpose |
+| --- | --- |
+| `debugger` | Uses Chrome DevTools Protocol's `Input.dispatchMouseEvent` as a fallback when regular click methods fail. |
+| Content script on `https://www.instagram.com/*` | Adds the control panel and automation logic to Instagram pages. |
 
-| Permission | Alasan |
-|:---|:---|
-| `debugger` | Mengirim event `Input.dispatchMouseEvent` melalui Chrome DevTools Protocol sehingga klik dapat diperlakukan sebagai **trusted input** oleh browser. Digunakan sebagai fallback ketika klik sintetis gagal. |
-| `content_scripts` pada `https://www.instagram.com/*` | Menyuntikkan UI dan logika otomasi ke halaman Instagram. |
+When the trusted-click fallback is used, Chrome or Brave may show a "debugging this browser" bar. This is expected while the debugger session is active and should disappear when the process stops or the session disconnects.
 
-> **Catatan:** Saat fitur *trusted click* digunakan, Brave/Chrome menampilkan bar **"sedang men-debug browser"** di bagian atas. Ini normal dan akan hilang setelah proses selesai atau dihentikan.
+## Project structure
 
----
+    ig-like-cleaner/
+    ├── manifest.json      # Manifest V3 configuration
+    ├── background.js      # Trusted-click fallback through CDP
+    ├── content.js         # UI and automation logic
+    └── README.md
 
-## 🧩 Struktur Proyek
+## How it works
 
-```text
-ig-unliker/
-├── manifest.json      # Manifest V3
-├── background.js      # Service worker: trusted click via CDP
-├── content.js         # UI dan logika otomasi
-└── README.md
-```
+`content.js` tries these click methods in order:
 
-### Cara Kerja Singkat
-
-```text
-┌─────────────────────┐   trustedClick   ┌────────────────────┐
-│  content.js (page)  │ ───────────────► │   background.js    │
-│  - Cari tombol      │                  │   chrome.debugger  │
-│  - Coba klik        │ ◄─────────────── │   Input.dispatch...│
-└─────────────────────┘   { ok: true }   └────────────────────┘
-```
-
-`content.js` mencoba 5 strategi klik secara berurutan:
-
-1. Klik sintetis (`PointerEvent` + `MouseEvent` lengkap).
+1. Synthetic click using `PointerEvent` and `MouseEvent`.
 2. `element.click()`.
-3. Event langsung ke elemen.
-4. Simulasi keyboard Enter.
-5. **Trusted click** melalui debugger.
+3. Direct event dispatch.
+4. Simulated Enter key.
+5. Trusted click through Chrome DevTools Protocol.
 
-Strategi yang berhasil disimpan dalam variabel `best`, sehingga siklus berikutnya dapat langsung menggunakan metode tersebut.
+When a method works, the extension stores it in the `best` variable and tries that method first in later batches.
 
----
+The content script communicates with `background.js` when it needs the trusted-click fallback.
 
-## 🌍 Menambah Bahasa Lain
+## Adding languages
 
-Edit objek `T` di `content.js`:
+Button labels are defined in the `T` object in `content.js`. Add translations that match the labels shown in your Instagram interface.
 
-```js
-const T = {
-  select: [
-    'select',
-    'pilih',
-    'auswählen',
-    'sélectionner'
-  ],
+    const T = {
+      select: [
+        'select',
+        'pilih',
+        'auswählen',
+        'sélectionner'
+      ],
 
-  unlike: [
-    'unlike',
-    'batal suka',
-    'gefällt mir nicht mehr',
-    'ne plus aimer'
-  ],
+      unlike: [
+        'unlike',
+        'batal suka',
+        'gefällt mir nicht mehr',
+        'ne plus aimer'
+      ],
 
-  cancel: [
-    'cancel',
-    'batal',
-    'abbrechen',
-    'annuler'
-  ]
-};
-```
+      cancel: [
+        'cancel',
+        'batal',
+        'abbrechen',
+        'annuler'
+      ]
+    };
 
-Tambahkan kata kunci tombol sesuai bahasa antarmuka Instagram yang digunakan. Gunakan huruf kecil agar konsisten dengan proses pencocokan teks di extension.
+Use lowercase labels to match the extension's text-matching logic.
 
----
+## Troubleshooting
 
-## 🐞 Troubleshooting
+| Problem | What to check |
+| --- | --- |
+| The panel does not appear | Reload the extension, then refresh the Instagram tab. |
+| "Select button not found" | Make sure you're on `/your_activity/interactions/likes/`. Run Diagnostics and check the logged button labels. |
+| Click methods fail | Instagram may have changed its page structure. Run Diagnostics and inspect the logs. |
+| Instagram restriction detected | Stop the process and avoid immediately starting it again. |
+| The debugging bar stays visible | Click Stop or close the Instagram tab to disconnect the debugger session. |
+| A `chrome://` URL access error appears | Reload the extension from `chrome://extensions`, then refresh Instagram. |
 
-| Masalah | Solusi |
-|:---|:---|
-| Panel tidak muncul | Refresh halaman Instagram setelah memuat atau me-reload extension. |
-| "Tombol Select/Pilih tidak ditemukan" | Pastikan berada di `/your_activity/interactions/likes/`. Jalankan **Diagnosa** dan periksa teks tombol di log. |
-| Semua cara klik gagal | Struktur UI Instagram mungkin telah berubah. Jalankan diagnosa dan periksa log untuk menemukan penyebabnya. |
-| "Instagram membatasi aksi" | Hentikan proses dan jangan langsung menjalankannya kembali. |
-| Bar "sedang men-debug" tidak hilang | Klik **Stop** atau tutup tab Instagram untuk memutus sesi debugger. |
-| Error `Cannot access a chrome:// URL` | Reload extension di `chrome://extensions`, lalu refresh halaman Instagram. |
+## Development
 
----
+After editing the extension:
 
-## 🛠️ Pengembangan
+1. Open `chrome://extensions`.
+2. Click **Reload** on IG Like Cleaner.
+3. Refresh the Instagram tab.
+4. Open **DevTools → Console** to view messages prefixed with `[IG Like Cleaner]`.
 
-1. Edit file yang diperlukan.
-2. Buka `chrome://extensions`.
-3. Klik **Reload** pada extension.
-4. Refresh halaman Instagram.
-5. Buka **DevTools → Console** untuk melihat log dengan prefix `[IG Unliker]`.
+The extension also displays logs in its control panel. Use **Copy log** when reporting an issue.
 
-Semua log juga ditampilkan di panel UI. Gunakan tombol **📋 Salin log** untuk menyalin log ketika melakukan troubleshooting.
+## Limitations
 
----
+- Designed for Instagram's **Your Activity → Likes** page.
+- Relies on Instagram's page structure, which may change without notice.
+- Automated actions can still trigger account restrictions. Delays do not guarantee that restrictions will be avoided.
+- The `debugger` permission is powerful and may trigger browser warnings. Review the code and only use the extension if you're comfortable granting that permission.
 
-## ⚠️ Batasan
+## License
 
-- Dirancang untuk bekerja pada halaman *Aktivitas Anda → Suka*.
-- Bergantung pada struktur DOM Instagram yang dapat berubah sewaktu-waktu.
-- Tidak ada jaminan bebas dari pembatasan akun.
-- Penggunaan otomasi tetap dapat memicu pembatasan Instagram, meskipun proses menggunakan jeda antarbatch.
-- Permission `debugger` memberikan akses yang sensitif dan dapat memunculkan peringatan browser. Gunakan hanya jika memahami implikasinya.
+This project is released under the MIT License. When redistributing it, include attribution and a copy of the license.
 
----
+## Contributing
 
-## 📄 Lisensi
+Issues and pull requests are welcome, particularly for:
 
-**MIT License** — bebas digunakan dan dimodifikasi sesuai ketentuan lisensi. Sertakan atribusi dan salinan lisensi saat mendistribusikan ulang.
-
----
-
-## 🙏 Kontribusi
-
-Pull request dan issue sangat diterima, terutama untuk:
-
-- Penambahan label tombol dalam bahasa lain.
-- Perbaikan selector DOM jika Instagram mengubah UI.
-- Peningkatan heuristik deteksi pembatasan.
-- Perbaikan stabilitas dan penanganan error.
-
-**Selamat membersihkan riwayat suka!** 💔 → ❤️
+- Adding labels for more languages.
+- Updating selectors when Instagram changes its interface.
+- Improving restriction detection.
+- Improving stability and error handling.
